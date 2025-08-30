@@ -13,13 +13,11 @@
   we only do this for rendering and not for calculation of physics
 */
 
-
-
 GLuint shaderProgram;
 GLuint VBO, VAO;
 
 // defines
-float gravity = 980;
+float gravity = 980.0f;
 float damping = 0.5;
 
 int numOfParticels;
@@ -32,7 +30,8 @@ GLuint compileShader(GLenum type, const char *source)
   return shader;
 }
 
-Game::Game(){
+Game::Game()
+{
   p = new Particle();
   numOfParticels = numOfParticels;
 }
@@ -53,6 +52,9 @@ bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
 
   window = SDL_CreateWindow(title, WINDOW_W, WINDOW_H, SDL_WINDOW_OPENGL);
 
+  p->setBounds(WINDOW_W / (float)UNITMULTIPLIER,
+               WINDOW_H / (float)UNITMULTIPLIER);
+
   context = SDL_GL_CreateContext(window);
 
   if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
@@ -62,6 +64,8 @@ bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
   }
 
   SDL_GL_SetSwapInterval(0);
+
+  ImguiInit();
 
   glEnable(GL_PROGRAM_POINT_SIZE); // Enable gl_PointSize in shader
   glEnable(GL_POINT_SPRITE);       // Enable point sprites
@@ -91,7 +95,7 @@ bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
 
 void Game::update(float dt)
 {
-  
+
   p->update(dt);
 
   numOfParticels = p->GetPositions().size();
@@ -108,6 +112,7 @@ void Game::update(float dt)
   {
     glBufferSubData(GL_ARRAY_BUFFER, 0, numOfParticels * sizeof(glm::vec2), p->GetPositions().data());
   }
+  p->boundryCollision();
 }
 
 void Game::handleEvent()
@@ -115,6 +120,8 @@ void Game::handleEvent()
   SDL_Event event;
   while (SDL_PollEvent(&event))
   {
+    ImGui_ImplSDL3_ProcessEvent(&event);
+
     if (event.type == SDL_EVENT_QUIT)
     {
       isRunning = false;
@@ -139,24 +146,29 @@ void Game::render()
   if (deltaTime >= 1000)
   {
     fps = frameCount * 1000.0f / deltaTime;
-    std::cout << "FPS: " << fps << std::endl; // Display in terminal""
-    std::cout<<"Number of paritcles : " << numOfParticels<<std::endl;
+    std::cout << "FPS: " << fps << std::endl;
+    std::cout << "Number of particles : " << numOfParticels << std::endl;
     frameCount = 0;
     frameTimePrev = currentTime;
   }
 
+  // 1. Clear screen first
   glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
 
+  // 2. Draw your particles
   shader->use();
   shader->setFloat("pointSize", p->GetRadius());
   shader->setVec2("screenSize", glm::vec2(WINDOW_W, WINDOW_H));
   shader->setScale("worldScale", UNITMULTIPLIER);
+  glUniform1f(glGetUniformLocation(shader->ID, "uAlpha"), p->alpha); // set alpha = 0.3
 
   glBindVertexArray(VAO);
-
   glDrawArrays(GL_POINTS, 0, numOfParticels);
 
+  ImguiRender();
+
+  // 6. Swap
   SDL_GL_SwapWindow(window);
 }
 
@@ -168,4 +180,49 @@ void Game::clear()
   SDL_GL_DestroyContext(context);
   SDL_DestroyWindow(window);
   SDL_Quit();
+}
+
+void Game::ImguiInit()
+{
+  // imgui Setup
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  (void)io;
+  ImGui::StyleColorsDark();
+
+  // 2. Init backends
+  ImGui_ImplSDL3_InitForOpenGL(window, context);
+  ImGui_ImplOpenGL3_Init("#version 330");
+}
+
+void Game::ImguiRender()
+{
+  // 3. Start ImGui frame
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplSDL3_NewFrame();
+  ImGui::NewFrame();
+
+  // 4. Build UI
+  ImGui::Begin("Debug");
+  ImGui::Text("Hello from ImGui!");
+  ImGui::SliderFloat("Gravity", &gravity, -20.0f, 20.0f);
+  ImGui::SliderFloat("Damping", &damping, 0.0f, 1.0f);
+  ImGui::SliderFloat("Radius", &p->GetRadius(), 0.0f, 10.0f);
+  ImGui::SliderFloat("alpha", &p->alpha, 0.0f, 1.0f);
+  ImGui::Checkbox("start", &p->running);
+  if (ImGui::SliderInt("Nparticles", &p->numOfParticels, 1, 1000))
+  {
+    p->grid();
+  }
+  if (ImGui::SliderFloat("spacing", &p->particeleSpacing, 0.0f, 5.0f))
+  {
+    p->grid();
+  }
+
+  ImGui::End();
+
+  // 5. Render ImGui on top
+  ImGui::Render();
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }

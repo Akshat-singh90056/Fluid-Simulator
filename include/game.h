@@ -6,6 +6,9 @@
 #include <SDL3/SDL_video.h>
 #include "shader.h"
 #include "Particle.h"
+#include "imgui.h"
+#include "backends/imgui_impl_sdl3.h"
+#include "backends/imgui_impl_opengl3.h"
 
 class Game
 {
@@ -19,6 +22,11 @@ public:
   void render();
   bool running() { return isRunning; }
   void clear();
+
+  // imgui
+
+  void ImguiInit();
+  void ImguiRender();
 
 private:
   int WINDOW_W, WINDOW_H;
