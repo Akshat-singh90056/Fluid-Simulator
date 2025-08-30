@@ -1,6 +1,7 @@
 #version 330 core
 out vec4 FragColor;
 
+
 void main()
 {
     vec2 coord = gl_PointCoord - vec2(0.5);
@@ -9,3 +10,4 @@ void main()
     else
         discard;
 }
+

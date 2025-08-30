@@ -17,6 +17,7 @@ public:
 
   void setFloat(const std::string &name, float value) const;
   void setVec2(const std::string &name, const glm::vec2 &value) const;
+  void setScale(const std::string &name,  float value) const;
 
 private:
   std::string readFile(const char *filePath);

@@ -5,13 +5,17 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_video.h>
 #include "shader.h"
+#include "Particle.h"
 
 class Game
 {
 public:
+
+  Game();
+
   bool init(const char *title, int WINDOW_W, int WINDOW_H);
   void handleEvent();
-  void update();
+  void update(float dt);
   void render();
   bool running() { return isRunning; }
   void clear();
@@ -26,6 +30,8 @@ private:
   Uint64 frameTimePrev;
   int frameCount;
   float fps;
+
+  Particle * p;
 };
 
 #endif // !GAME_H

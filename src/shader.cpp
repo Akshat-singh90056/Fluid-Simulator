@@ -64,6 +64,15 @@ void Shader::setVec2(const std::string &name, const glm::vec2 &value) const {
     glUniform2f(loc, value.x, value.y);
 }
 
+void Shader::setScale(const std::string &name, float value) const {
+    GLint loc = glGetUniformLocation(ID, name.c_str());
+    if (loc == -1) {
+        std::cerr << "Warning: Uniform '" << name << "' not found!" << std::endl;
+        return;
+    }
+    glUniform1f(loc, value);
+}
+
 void Shader::use() const{
   glUseProgram(ID);
 }

@@ -3,19 +3,26 @@
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_video.h>
 #include <iostream>
-#include<vector>
 #include <time.h>
+#include <vector>
 
-const int numPartcles = 10000;
-float particlePos[numPartcles * 2]; // example pixel coords
+#define UNITMULTIPLIER 100
+
+/*
+  1 UNIT Is 100 pixels
+  we only do this for rendering and not for calculation of physics
+*/
+
+
 
 GLuint shaderProgram;
 GLuint VBO, VAO;
 
-std::vector<float> positions;
-std::vector<float> velocities;
+// defines
+float gravity = 980;
+float damping = 0.5;
 
-float r = 10.0f;
+int numOfParticels;
 
 GLuint compileShader(GLenum type, const char *source)
 {
@@ -23,6 +30,11 @@ GLuint compileShader(GLenum type, const char *source)
   glShaderSource(shader, 1, &source, NULL);
   glCompileShader(shader);
   return shader;
+}
+
+Game::Game(){
+  p = new Particle();
+  numOfParticels = numOfParticels;
 }
 
 bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
@@ -43,7 +55,6 @@ bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
 
   context = SDL_GL_CreateContext(window);
 
-
   if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
   {
     std::cerr << "Failed to initialize GLAD" << std::endl;
@@ -55,27 +66,14 @@ bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
   glEnable(GL_PROGRAM_POINT_SIZE); // Enable gl_PointSize in shader
   glEnable(GL_POINT_SPRITE);       // Enable point sprites
 
-  int i = 0;
-  srand(time(NULL));
-
-  for (int j = 0; j < numPartcles; j++)
-  {
-    int x = rand() % WINDOW_W;
-    int y = rand() % WINDOW_H;
-
-    particlePos[i] = x;
-    particlePos[i + 1] = y;
-    i += 2;
-  }
-
   glGenVertexArrays(1, &VAO);
   glGenBuffers(1, &VBO);
 
   glBindVertexArray(VAO);
   glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(particlePos), particlePos, GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, numOfParticels * sizeof(glm::vec2), p->GetPositions().data(), GL_STATIC_DRAW);
 
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void *)0);
   glEnableVertexAttribArray(0);
 
   shader = new Shader("shaders/vertex.vert", "shaders/fragment.frag");
@@ -91,10 +89,25 @@ bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
   return true;
 }
 
-void Game::update()
+void Game::update(float dt)
 {
+  
+  p->update(dt);
 
-  // this is a comment and i am chekcing id this saves on formaing or not
+  numOfParticels = p->GetPositions().size();
+  glBindBuffer(GL_ARRAY_BUFFER, VBO);
+  static size_t lastSize = 0;
+
+  // Reallocate buffer if new particles were added
+  if (numOfParticels != lastSize)
+  {
+    glBufferData(GL_ARRAY_BUFFER, numOfParticels * sizeof(glm::vec2), p->GetPositions().data(), GL_DYNAMIC_DRAW);
+    lastSize = numOfParticels;
+  }
+  else
+  {
+    glBufferSubData(GL_ARRAY_BUFFER, 0, numOfParticels * sizeof(glm::vec2), p->GetPositions().data());
+  }
 }
 
 void Game::handleEvent()
@@ -110,11 +123,10 @@ void Game::handleEvent()
     {
       if (event.key.key == SDLK_UP)
       {
-        r += 1.0f;
+        p->GetRadius() += 1.0f;
       }
     }
   }
-
 }
 
 void Game::render()
@@ -127,7 +139,8 @@ void Game::render()
   if (deltaTime >= 1000)
   {
     fps = frameCount * 1000.0f / deltaTime;
-    std::cout << "FPS: " << fps << std::endl; // Display in terminal
+    std::cout << "FPS: " << fps << std::endl; // Display in terminal""
+    std::cout<<"Number of paritcles : " << numOfParticels<<std::endl;
     frameCount = 0;
     frameTimePrev = currentTime;
   }
@@ -136,13 +149,13 @@ void Game::render()
   glClear(GL_COLOR_BUFFER_BIT);
 
   shader->use();
-  shader->setFloat("pointSize", r);
+  shader->setFloat("pointSize", p->GetRadius());
   shader->setVec2("screenSize", glm::vec2(WINDOW_W, WINDOW_H));
+  shader->setScale("worldScale", UNITMULTIPLIER);
 
   glBindVertexArray(VAO);
 
-  int numVertices = sizeof(particlePos) / (sizeof(float));
-  glDrawArrays(GL_POINTS, 0, (int)(numVertices / 2));
+  glDrawArrays(GL_POINTS, 0, numOfParticels);
 
   SDL_GL_SwapWindow(window);
 }
