@@ -5,6 +5,7 @@
 #include <iostream>
 #include <time.h>
 #include <vector>
+#include <glm/gtc/matrix_transform.hpp>
 
 #define UNITMULTIPLIER 100
 
@@ -15,10 +16,7 @@
 
 GLuint shaderProgram;
 GLuint VBO, VAO;
-
-// defines
-float gravity = 980.0f;
-float damping = 0.5;
+GLuint colorVBO;
 
 int numOfParticels;
 
@@ -32,8 +30,11 @@ GLuint compileShader(GLenum type, const char *source)
 
 Game::Game()
 {
-  p = new Particle();
-  numOfParticels = numOfParticels;
+  numOfParticels = 0;
+  previousNumParticles = 0;
+  cameraPosition = {0.0f, 0.0f};
+  cameraZoom = 1.0f;
+  cameraSpeed = 0.5f;
 }
 
 bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
@@ -52,9 +53,6 @@ bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
 
   window = SDL_CreateWindow(title, WINDOW_W, WINDOW_H, SDL_WINDOW_OPENGL);
 
-  p->setBounds(WINDOW_W / (float)UNITMULTIPLIER,
-               WINDOW_H / (float)UNITMULTIPLIER);
-
   context = SDL_GL_CreateContext(window);
 
   if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
@@ -64,21 +62,34 @@ bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
   }
 
   SDL_GL_SetSwapInterval(0);
+  glViewport(0, 0, WINDOW_W, WINDOW_H);
 
+  p = new Particle(WINDOW_W, WINDOW_H);
   ImguiInit();
 
-  glEnable(GL_PROGRAM_POINT_SIZE); // Enable gl_PointSize in shader
-  glEnable(GL_POINT_SPRITE);       // Enable point sprites
+  glEnable(GL_PROGRAM_POINT_SIZE);
+  glEnable(GL_POINT_SPRITE);
+
+  numOfParticels = p->GetPositions().size();
+  colors.resize(numOfParticels, glm::vec3(0.0f, 0.0f, 1.0f));
 
   glGenVertexArrays(1, &VAO);
   glGenBuffers(1, &VBO);
+  glGenBuffers(1, &colorVBO);
 
   glBindVertexArray(VAO);
-  glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  glBufferData(GL_ARRAY_BUFFER, numOfParticels * sizeof(glm::vec2), p->GetPositions().data(), GL_STATIC_DRAW);
 
+  glBindBuffer(GL_ARRAY_BUFFER, VBO);
+  glBufferData(GL_ARRAY_BUFFER, numOfParticels * sizeof(glm::vec2), p->GetPositions().data(), GL_DYNAMIC_DRAW);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void *)0);
   glEnableVertexAttribArray(0);
+
+  glBindBuffer(GL_ARRAY_BUFFER, colorVBO);
+  glBufferData(GL_ARRAY_BUFFER, numOfParticels * sizeof(glm::vec3), colors.data(), GL_DYNAMIC_DRAW);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void *)0);
+  glEnableVertexAttribArray(1);
+
+  glBindVertexArray(0);
 
   shader = new Shader("shaders/vertex.vert", "shaders/fragment.frag");
 
@@ -95,32 +106,78 @@ bool Game::init(const char *title, int WINDOW_W, int WINDOW_H)
 
 void Game::update(float dt)
 {
-
   p->update(dt);
-
   numOfParticels = p->GetPositions().size();
-  glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  static size_t lastSize = 0;
 
-  // Reallocate buffer if new particles were added
-  if (numOfParticels != lastSize)
+  if (numOfParticels != previousNumParticles || previousNumParticles == -1)
   {
-    glBufferData(GL_ARRAY_BUFFER, numOfParticels * sizeof(glm::vec2), p->GetPositions().data(), GL_DYNAMIC_DRAW);
-    lastSize = numOfParticels;
+    std::cout << "Particle count changed from " << previousNumParticles
+              << " to " << numOfParticels << std::endl;
+    recreateBuffers();
   }
-  else
+
+  previousNumParticles = numOfParticels;
+
+  colors.resize(numOfParticels);
+  float maxSpeed = 5.0f;
+
+  for (int i = 0; i < numOfParticels; i++)
   {
-    glBufferSubData(GL_ARRAY_BUFFER, 0, numOfParticels * sizeof(glm::vec2), p->GetPositions().data());
+    float t = glm::clamp(p->speed[i] / maxSpeed, 0.0f, 1.0f);
+    
+    // blue to green
+    if (t < 0.33f) {
+      // blue to cyan
+      float localT = t * 3.0f;
+      colors[i] = glm::vec3(0.0f, localT, 1.0f);
+    } else if (t < 0.66f) {
+      // cyan to green
+      float localT = (t - 0.33f) * 3.0f;
+      colors[i] = glm::vec3(0.0f, 1.0f, 1.0f - localT);
+    } else {
+      // green to orange
+      float localT = (t - 0.66f) * 3.0f;
+      colors[i] = glm::vec3(localT, 1.0f - localT * 0.5f, 0.0f);
+    }
   }
-  p->boundryCollision();
+
+  glBindBuffer(GL_ARRAY_BUFFER, VBO);
+  glBufferSubData(GL_ARRAY_BUFFER, 0, numOfParticels * sizeof(glm::vec2), p->GetPositions().data());
+
+  glBindBuffer(GL_ARRAY_BUFFER, colorVBO);
+  glBufferSubData(GL_ARRAY_BUFFER, 0, numOfParticels * sizeof(glm::vec3), colors.data());
 }
 
 void Game::handleEvent()
 {
   SDL_Event event;
+  ImGuiIO &io = ImGui::GetIO();
+
   while (SDL_PollEvent(&event))
   {
     ImGui_ImplSDL3_ProcessEvent(&event);
+    if (io.WantCaptureMouse)
+    {
+      switch (event.type)
+      {
+      case SDL_EVENT_MOUSE_BUTTON_DOWN:
+      case SDL_EVENT_MOUSE_BUTTON_UP:
+      case SDL_EVENT_MOUSE_MOTION:
+      case SDL_EVENT_MOUSE_WHEEL:
+        continue;
+      }
+    }
+
+    if (io.WantCaptureKeyboard)
+    {
+      switch (event.type)
+      {
+      case SDL_EVENT_KEY_DOWN:
+      case SDL_EVENT_KEY_UP:
+      case SDL_EVENT_TEXT_INPUT:
+        continue;
+      }
+    }
 
     if (event.type == SDL_EVENT_QUIT)
     {
@@ -133,6 +190,8 @@ void Game::handleEvent()
         p->GetRadius() += 1.0f;
       }
     }
+
+    p->OnEvent(event);
   }
 }
 
@@ -142,7 +201,6 @@ void Game::render()
   Uint64 currentTime = SDL_GetTicks();
   Uint64 deltaTime = currentTime - frameTimePrev;
 
-  // Update FPS every second
   if (deltaTime >= 1000)
   {
     fps = frameCount * 1000.0f / deltaTime;
@@ -152,23 +210,22 @@ void Game::render()
     frameTimePrev = currentTime;
   }
 
-  // 1. Clear screen first
   glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
 
-  // 2. Draw your particles
   shader->use();
-  shader->setFloat("pointSize", p->GetRadius());
+
+  shader->setFloat("pointSize", p->GetRadius() * 2.0f);
   shader->setVec2("screenSize", glm::vec2(WINDOW_W, WINDOW_H));
   shader->setScale("worldScale", UNITMULTIPLIER);
-  glUniform1f(glGetUniformLocation(shader->ID, "uAlpha"), p->alpha); // set alpha = 0.3
+  glUniform1f(glGetUniformLocation(shader->ID, "uAlpha"), p->alpha);
 
   glBindVertexArray(VAO);
   glDrawArrays(GL_POINTS, 0, numOfParticels);
 
   ImguiRender();
 
-  // 6. Swap
+  
   SDL_GL_SwapWindow(window);
 }
 
@@ -184,45 +241,71 @@ void Game::clear()
 
 void Game::ImguiInit()
 {
-  // imgui Setup
+
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   (void)io;
   ImGui::StyleColorsDark();
 
-  // 2. Init backends
   ImGui_ImplSDL3_InitForOpenGL(window, context);
   ImGui_ImplOpenGL3_Init("#version 330");
 }
 
 void Game::ImguiRender()
 {
-  // 3. Start ImGui frame
+
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
 
-  // 4. Build UI
   ImGui::Begin("Debug");
   ImGui::Text("Hello from ImGui!");
-  ImGui::SliderFloat("Gravity", &gravity, -20.0f, 20.0f);
-  ImGui::SliderFloat("Damping", &damping, 0.0f, 1.0f);
-  ImGui::SliderFloat("Radius", &p->GetRadius(), 0.0f, 10.0f);
+  ImGui::SliderFloat("Gravity", &p->GRAVITY, 0.0f, 100.0f);
+  // ImGui::SliderFloat("Damping", &p->damping, 0.0f, 3.0f);
+  if (ImGui::SliderFloat("Radius", &p->GetRadius(), 0.0f, 10.0f))
+    ;
   ImGui::SliderFloat("alpha", &p->alpha, 0.0f, 1.0f);
-  ImGui::Checkbox("start", &p->running);
-  if (ImGui::SliderInt("Nparticles", &p->numOfParticels, 1, 1000))
+
+  if (ImGui::SliderInt("numParticles", &p->numParticles, 0, 3500) ||
+      ImGui::SliderFloat("spacing", &p->particleSpacing, 0.0f, 2.0f))
   {
-    p->grid();
-  }
-  if (ImGui::SliderFloat("spacing", &p->particeleSpacing, 0.0f, 5.0f))
-  {
-    p->grid();
+    p->MakeGrid();
+    previousNumParticles = -1;
   }
 
+  ImGui::SliderFloat("smoothign Radius", &p->smoothingRadius, 0.0f, 10.0f);
+  ImGui::SliderFloat("target Density", &p->targetDensity, 0.0f, 20.0f);
+  ImGui::SliderFloat("pressureMultiplier", &p->pressureMultiplier, 0.0f, 200.0f);
+  ImGui::Checkbox("start", &p->running);
   ImGui::End();
 
-  // 5. Render ImGui on top
   ImGui::Render();
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void Game::recreateBuffers()
+{
+
+  glDeleteBuffers(1, &VBO);
+  glDeleteBuffers(1, &colorVBO);
+  glDeleteVertexArrays(1, &VAO);
+
+  glGenVertexArrays(1, &VAO);
+  glGenBuffers(1, &VBO);
+  glGenBuffers(1, &colorVBO);
+
+  glBindVertexArray(VAO);
+
+  glBindBuffer(GL_ARRAY_BUFFER, VBO);
+  glBufferData(GL_ARRAY_BUFFER, numOfParticels * sizeof(glm::vec2), p->GetPositions().data(), GL_DYNAMIC_DRAW);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void *)0);
+  glEnableVertexAttribArray(0);
+
+  glBindBuffer(GL_ARRAY_BUFFER, colorVBO);
+  glBufferData(GL_ARRAY_BUFFER, numOfParticels * sizeof(glm::vec3), colors.data(), GL_DYNAMIC_DRAW);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void *)0);
+  glEnableVertexAttribArray(1);
+
+  glBindVertexArray(0);
 }
