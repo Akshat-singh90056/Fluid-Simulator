@@ -29,9 +29,8 @@ public:
 
   std::vector<glm::vec3> colors;
 
-  void handleCameraControls(float dt);
-  glm::mat4 getViewMatrix() const;
-  glm::mat4 getProjectionMatrix() const;
+  
+ 
 
   glm::vec2 cameraPosition;
   float cameraZoom;

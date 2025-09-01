@@ -12,9 +12,9 @@ bool rightMouseDown = false;
 
 Particle::Particle(int W, int H) : WINDOW_W(W), WINDOW_H(H)
 {
-    radius = 0.01f;
+    radius = 0.038f;
     particleSpacing = 0.0f;
-    smoothingRadius = 0.5f;
+    smoothingRadius = 0.17f;
 
     float halfW = (W / 2.0f) / 100.0f;
     float halfH = (H / 2.0f) / 100.0f;
@@ -37,6 +37,9 @@ Particle::Particle(int W, int H) : WINDOW_W(W), WINDOW_H(H)
     updateDensities(position);
     speed.resize(numParticles, 0.0f);
     cellSize = smoothingRadius;
+
+    coefKernel = 4.0f / (M_PI * pow(smoothingRadius, 8));
+    coefGradient = -30.0f / (M_PI * pow(smoothingRadius, 5));
 }
 
 Particle::~Particle()
@@ -145,7 +148,7 @@ void Particle::OnEvent(SDL_Event &e)
         else if (e.button.button == SDL_BUTTON_RIGHT)
         {
             rightMouseDown = true;
-            applyMousePressure(mouseWorldPos, -10.0f, 1.0f);
+            applyMousePressure(mouseWorldPos, -1.0f, 4.0f);
         }
         else if (e.button.button == SDL_BUTTON_MIDDLE)
         {
@@ -172,7 +175,7 @@ void Particle::OnEvent(SDL_Event &e)
         }
         else if (e.motion.state & SDL_BUTTON_RMASK)
         {
-            applyMousePressure(mouseWorldPos, -1.0f, 0.8f);
+            applyMousePressure(mouseWorldPos, -0.3f, 4.0f);
         }
     }
 }
@@ -249,9 +252,9 @@ float Particle::smoothingKernel(float sr, float r)
 {
     if (r >= sr)
         return 0.0f;
-    float coef = 4.0f / (M_PI * pow(sr, 8));
+
     float diff = (sr * sr - r * r);
-    return coef * diff * diff * diff; 
+    return coefKernel * diff * diff * diff;
 }
 
 glm::vec2 Particle::smoothingKernelGradient(float sr, glm::vec2 vec)
@@ -259,14 +262,13 @@ glm::vec2 Particle::smoothingKernelGradient(float sr, glm::vec2 vec)
     float r = glm::length(vec);
     if (r <= 0.0f || r >= sr)
         return glm::vec2(0.0f);
-    float coef = -30.0f / (M_PI * pow(sr, 5));
+
     float factor = (sr - r) * (sr - r);
-    return coef * factor * (vec / r);
+    return coefGradient * factor * (vec / r);
 }
 
 float Particle::calculateDensity(glm::vec2 samplePoint)
 {
-    float mass = 1.0f;
     float density = 0.0f;
     float sr = std::max(0.1f, smoothingRadius);
 
@@ -288,7 +290,6 @@ float Particle::calculateDensity(glm::vec2 samplePoint)
 
 float Particle::calculateProperty(glm::vec2 point)
 {
-    float mass = 1.0f;
     float property = 0.0f;
 
     for (int i = 0; i < numParticles; i++)
@@ -309,7 +310,6 @@ float Particle::calculateProperty(glm::vec2 point)
 glm::vec2 Particle::calculatePressureForce(int particleIndex)
 {
     glm::vec2 pressureForce(0.0f);
-    float mass = 1.0f;
     glm::vec2 samplePoint = predictedPosition[particleIndex];
 
     std::vector<int> neighbors = getNeighbors(samplePoint);
@@ -378,6 +378,7 @@ void Particle::buildSpatialGrid(std::vector<glm::vec2> predictedPos)
     }
 }
 
+
 std::vector<int> Particle::getNeighbors(glm::vec2 samplePoint)
 {
     std::vector<int> neighbors;
@@ -413,6 +414,7 @@ std::vector<int> Particle::getNeighbors(glm::vec2 samplePoint)
     return neighbors;
 }
 
+
 void Particle::applyMousePressure(glm::vec2 mousePos, float pressureStrength, float radius)
 {
     for (int i = 0; i < numParticles; i++)
@@ -438,4 +440,10 @@ void Particle::applyMousePressure(glm::vec2 mousePos, float pressureStrength, fl
             }
         }
     }
+}
+
+void Particle::recalculateSRConstant()
+{
+    coefKernel = 4.0f / (M_PI * pow(smoothingRadius, 8));
+    coefGradient = -30.0f / (M_PI * pow(smoothingRadius, 5));
 }
