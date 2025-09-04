@@ -129,10 +129,22 @@ To evolve this from an intermediate to an advanced-level SPH simulator, the foll
 - **SDL3 Documentation**: [SDL Official Site](https://www.libsdl.org/)
 - **ImGui Documentation**: [ImGui GitHub](https://github.com/ocornut/imgui)
 - **OpenGL Documentation**: [OpenGL Official Site](https://www.opengl.org/)
-- **Numerical Methods for Fluid Dynamics**: [Book Reference](https://www.springer.com/gp/book/9783540746129)
 
 
 
 ### ⚡ Note:
 
 This project bridges the gap between theory and practice. It begins as an educational framework for learning SPH, but with extensions, it can evolve into a research-grade fluid solver suitable for graphics and engineering applications.
+
+
+## 8. Screenshots
+
+- **Normal Simulation wave nature**
+![Fluid Simulation Screenshot](images/sim(2).png)
+
+- **Normal state or rest state**
+![Fluid Simulation Screenshot](images/sim(3).png)
+- **Creating air pressure in the water to simulate flow of water over it**
+![Fluid Simulation Screenshot](images/sim(4).png)
+- **Crating a high water tide**
+![Fluid Simulation Screenshot](images/sim(5).png)
