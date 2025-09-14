@@ -146,5 +146,5 @@ This project bridges the gap between theory and practice. It begins as an educat
 ![Fluid Simulation Screenshot](images/sim(3).png)
 - **Creating air pressure in the water to simulate flow of water over it**
 ![Fluid Simulation Screenshot](images/sim(4).png)
-- **Crating a high water tide**
+- **Creating a high water tide**
 ![Fluid Simulation Screenshot](images/sim(5).png)
